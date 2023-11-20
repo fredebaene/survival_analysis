@@ -1,0 +1,162 @@
+---
+title: "Kaplan-Meier Survival Models"
+author: "Frederick De Baene"
+format: html
+editor: visual
+---
+
+### Introduction
+
+This notebook focuses on fitting a Kaplan-Meier (KM) survival model. This non-parametric model can be used to estimate the survival curve (**S(t)**) and is easy to interpret. However, it does not allow to estimate the hazard ratio (HR), it has no functional form (it is a step function), and it can only include a few categorical predictor variables.
+
+### Setup
+
+```{r}
+#| label: "Load libraries"
+#| code-summary: Load libraries
+#| echo: true
+#| warning: false
+#| error: true
+library(survival)
+library(survminer)
+library(tidyverse)
+```
+
+```{r}
+#| label: "Create a data set with survival data"
+#| code-summary: Create a data set with survival data
+#| echo: true
+#| warning: false
+#| error: true
+df <- tibble::tibble(
+    "time" = c(2, 3, 6, 6, 7, 10, 15, 15, 16, 27, 30, 32),
+    "status" = c(1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1)
+)
+```
+
+### Indicator variable
+
+When you work with survival data, make sure you always know how the indicator variable is encoded. In this example, 0 indicates censoring while 1 indicates the event of interest occurred.
+
+### Fitting the KM model
+
+We can now fit a KM model using the **survival** package. This package is available in base R.
+
+```{r}
+#| label: "Fit a KM model to estimate the survival curve"
+#| code-summary: FIt a KM model to estimate the survival curve
+#| echo: true
+#| warning: false
+#| error: true
+surv_fit <- survival::survfit(survival::Surv(time, status) ~ 1, data = df)
+```
+
+Kaplan-Meier is the default argument for the **type** argument of the **survfit()** function. Now that the model is fit, we can ask for a few summaries.
+
+```{r}
+#| label: "Obtain a first summary of the fitted KM model"
+#| code-summary: Obtain a first summary of the fitted KM model
+#| echo: true
+#| warning: false
+#| error: true
+surv_fit
+```
+
+This summary shows that the data set comprises 12 observations. The event of interest occurred 10 times. The median survival time is 15 months, meaning that half of the persons survived beyond 15 months and the other half did not. There is also a confidence interval. The upper limit of the confidence interval is not calculated as the data set is too small.
+
+```{r}
+#| label: "Obtain a second summary of the fitted KM model"
+#| code-summary: Obtain a second summary of the fitted KM model
+#| echo: true
+#| warning: false
+#| error: true
+summary(surv_fit)
+```
+
+This summary shows that, e.g., the probability of surviving beyond 7 months equals 0.642. We are 95% confident that true probability of surviving beyond 7 months is between 0.4132 and 0.996.
+
+```{r}
+#| label: "Create a first KM curve"
+#| code-summary: Create a first KM curve
+#| echo: true
+#| warning: false
+#| error: true
+surv_fig <- survminer::ggsurvplot(
+  surv_fit,
+  conf.int = TRUE,
+  conf.int.style = "step"
+)
+
+surv_fig$plot <- surv_fig$plot + geom_hline(yintercept = 0.5, color = "blue")
+print(surv_fig$plot)
+```
+
+The figure above shows why the upper limit of the confidence interval cannot be estimated. The blue horizontal line at 0.50 crosses the dashed line representing the lower limit of the confidence band and the actual survival curve, but it does not cross the dashed line representing the upper limit of the confidence band.
+
+### Adjust data set
+
+The data set is modified such that new observations are added and every observation is categorized as 40+ or not.
+
+```{r}
+#| label: "Adjust data set"
+#| code-summary: Adjust data set
+#| echo: true
+#| warning: false
+#| error: true
+df <- dplyr::bind_rows(
+  df, tibble::tibble(
+    "time" = c(1, 1, 1, 1, 2, 3, 3, 9, 22),
+    "status" = c(1, 0, 1, 1, 1, 1, 1, 1, 0)
+  )
+)
+df$over_forty <- c(rep(0, 12), rep(1, 9))
+```
+
+```{r}
+#| label: "Fit a KM model to estimate survival by age group"
+#| code-summary: Fit a KM model to estimate survival by age group
+#| echo: false
+#| warning: true
+#| error: false
+surv_fit_by_age <- survival::survfit(
+  survival::Surv(time, status) ~ over_forty, data = df
+)
+```
+
+```{r}
+#| label: "Obtain a third summary of the fitted KM model"
+#| code-summary: Obtain a third summary of the fitted KM model
+#| echo: true
+#| warning: false
+#| error: true
+surv_fit_by_age
+```
+
+```{r}
+#| label: "Obtain a fourth summary of the fitted KM model"
+#| code-summary: Obtain a fourth summary of the fitted KM model
+#| echo: true
+#| warning: false
+#| error: true
+summary(surv_fit_by_age)
+```
+
+```{r}
+#| label: "Create a second KM curve"
+#| code-summary: Create a second KM curve
+#| echo: true
+#| warning: false
+#| error: true
+surv_fig_by_age <- ggsurvplot(surv_fit_by_age)
+surv_fig_by_age$plot
+```
+
+```{r}
+#| label: "Use the log-rank test to check for differential survival"
+#| code-summary: Use the log-rank test to check for differential survival
+#| echo: true
+#| warning: false
+#| error: true
+survival::survdiff(Surv(time, status) ~ over_forty, data = df)
+```
+
